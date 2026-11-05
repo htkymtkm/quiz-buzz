@@ -242,7 +242,6 @@
     </div>
 
     <div class="stage">
-      <div class="round-pill">Round {{ buzz.round || 1 }}</div>
 
       <div class="buzzer-zone">
         <button class="buzzer" :class="{ 'is-you': buzz.winnerId === myId, 'is-other': buzz.winnerId && buzz.winnerId !== myId }"
@@ -260,8 +259,8 @@
         </div>
       </div>
 
-      <button class="reset-btn" v-if="canReset" @click="resetRound">Next Round →</button>
-      <div class="host-fallback-note" v-if="canReset && !isHost">Host left — you can reset the round.</div>
+      <button class="reset-btn" v-if="canReset" @click="resetRound">Reset</button>
+      <div class="host-fallback-note" v-if="canReset && !isHost">Host left — you can reset the buzzer.</div>
     </div>
 
     <div class="conn-note" v-if="!connected">Reconnecting…</div>
@@ -307,7 +306,7 @@ createApp({
       myName: '',
       meta: { hostId: null },
       participants: {},
-      buzz: { round: 1, winnerId: null, winnerName: null },
+      buzz: {},
 
       refs: { meta: null, participants: null, buzz: null, myParticipant: null, connected: null },
       confettiDots: [],
@@ -376,9 +375,6 @@ createApp({
         await withTimeout(this.refs.meta.transaction(current =>
           current === null ? { hostId: this.myId, createdAt: Date.now() } : undefined
         ));
-        await withTimeout(this.refs.buzz.transaction(current =>
-          current === null ? { round: 1, winnerId: null, winnerName: null } : undefined
-        ));
 
         await withTimeout(this.refs.myParticipant.set({
           name: this.myName,
@@ -388,7 +384,7 @@ createApp({
 
         this.refs.meta.on('value', snap => { this.meta = snap.val() || { hostId: null }; });
         this.refs.participants.on('value', snap => { this.participants = snap.val() || {}; });
-        this.refs.buzz.on('value', snap => { this.buzz = snap.val() || { round: 1, winnerId: null, winnerName: null }; });
+        this.refs.buzz.on('value', snap => { this.buzz = snap.val() || {}; });
 
         const connRef = raw(this.db.ref('.info/connected'));
         connRef.on('value', snap => { this.connected = snap.val() === true; });
@@ -406,19 +402,13 @@ createApp({
     pressBuzz(){
       if (this.buzz.winnerId) return;
       this.refs.buzz.transaction(current => {
-        if (current && current.winnerId === null){
-          return { round: current.round, winnerId: this.myId, winnerName: this.myName };
-        }
-        return;
+        if (current && current.winnerId) return; // someone already buzzed: abort
+        return { winnerId: this.myId, winnerName: this.myName };
       });
     },
     resetRound(){
       this.confettiDots = [];
-      this.refs.buzz.transaction(current => ({
-        round: (current && current.round ? current.round : 0) + 1,
-        winnerId: null,
-        winnerName: null
-      }));
+      this.refs.buzz.remove();
     },
     spawnConfetti(){
       const dots = [];
@@ -449,7 +439,7 @@ createApp({
       this.refs = { meta: null, participants: null, buzz: null, myParticipant: null, connected: null };
       this.participants = {};
       this.meta = { hostId: null };
-      this.buzz = { round: 1, winnerId: null, winnerName: null };
+      this.buzz = {};
       this.roomCode = '';
       this.confettiDots = [];
       this.screen = 'join';
