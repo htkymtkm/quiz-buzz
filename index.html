@@ -329,7 +329,7 @@ createApp({
   created(){
     if (this.configured){
       firebase.initializeApp(firebaseConfig);
-      this.db = firebase.database();
+      this.db = Vue.markRaw(firebase.database());
     }
     try {
       const saved = JSON.parse(localStorage.getItem('buzzer_identity') || 'null');
@@ -362,36 +362,43 @@ createApp({
         this.myName = name;
         this.saveIdentity();
 
+        const raw = Vue.markRaw;
+        const withTimeout = (p, ms = 10000) => Promise.race([
+          p,
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout: no response from database')), ms))
+        ]);
         const roomRef = this.db.ref('rooms/' + code);
-        this.refs.meta = roomRef.child('meta');
-        this.refs.participants = roomRef.child('participants');
-        this.refs.buzz = roomRef.child('buzz');
-        this.refs.myParticipant = this.refs.participants.child(this.myId);
+        this.refs.meta = raw(roomRef.child('meta'));
+        this.refs.participants = raw(roomRef.child('participants'));
+        this.refs.buzz = raw(roomRef.child('buzz'));
+        this.refs.myParticipant = raw(this.refs.participants.child(this.myId));
 
-        await this.refs.meta.transaction(current =>
+        await withTimeout(this.refs.meta.transaction(current =>
           current === null ? { hostId: this.myId, createdAt: Date.now() } : undefined
-        );
-        await this.refs.buzz.transaction(current =>
+        ));
+        await withTimeout(this.refs.buzz.transaction(current =>
           current === null ? { round: 1, winnerId: null, winnerName: null } : undefined
-        );
+        ));
 
-        await this.refs.myParticipant.set({
+        await withTimeout(this.refs.myParticipant.set({
           name: this.myName,
           joinedAt: firebase.database.ServerValue.TIMESTAMP
-        });
+        }));
         this.refs.myParticipant.onDisconnect().remove();
 
         this.refs.meta.on('value', snap => { this.meta = snap.val() || { hostId: null }; });
         this.refs.participants.on('value', snap => { this.participants = snap.val() || {}; });
         this.refs.buzz.on('value', snap => { this.buzz = snap.val() || { round: 1, winnerId: null, winnerName: null }; });
 
-        const connRef = firebase.database().ref('.info/connected');
+        const connRef = raw(this.db.ref('.info/connected'));
         connRef.on('value', snap => { this.connected = snap.val() === true; });
         this.refs.connected = connRef;
 
         this.screen = 'room';
       } catch(e){
-        this.errorMsg = 'Could not connect. Check your Firebase config and rules.';
+        console.error(e);
+        const detail = (e && (e.code || e.message)) ? ' [' + (e.code || e.message) + ']' : '';
+        this.errorMsg = 'Could not connect. Check your Firebase config and rules.' + detail;
       } finally {
         this.joining = false;
       }
