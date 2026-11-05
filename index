@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Quiz Buzz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;700;800&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg-a:#EAF1FF;
+    --bg-b:#FFF3E9;
+    --ink:#241D3D;
+    --muted:#7A7396;
+    --card:#FFFFFF;
+    --line: rgba(36,29,61,0.09);
+    --grape:#7C5CFC;
+    --grape-dark:#5C3FE0;
+    --tangerine:#FF8A3D;
+    --bubblegum:#FF4F87;
+    --mint:#22C69B;
+    --sun:#FFC93C;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background: linear-gradient(160deg, var(--bg-a) 0%, var(--bg-b) 100%);
+    color:var(--ink);
+    font-family:'Nunito',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    display:flex; align-items:stretch; justify-content:center;
+    position:relative; overflow-x:hidden;
+  }
+  /* ambient confetti-dot background, quiet and decorative */
+  body::before, body::after{
+    content:''; position:fixed; width:340px; height:340px; border-radius:50%;
+    filter:blur(50px); opacity:0.35; z-index:0; pointer-events:none;
+  }
+  body::before{ background:var(--grape); top:-120px; right:-100px; }
+  body::after{ background:var(--sun); bottom:-140px; left:-110px; }
+
+  #app{ width:100%; max-width:520px; display:flex; flex-direction:column; position:relative; z-index:1; }
+  .display{ font-family:'Fredoka', sans-serif; }
+  .mono{ font-family:'Space Mono', monospace; letter-spacing:0.08em; }
+  .eyebrow{ font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); font-weight:800; }
+
+  /* ---------- Join screen ---------- */
+  .join-wrap{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:22px; padding: 24px 4px; }
+  .brand{ text-align:center; }
+  .brand .mark{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:64px; height:64px; border-radius:22px;
+    background:linear-gradient(135deg, var(--tangerine), var(--bubblegum));
+    box-shadow: 0 8px 20px rgba(255,79,135,0.35);
+    margin-bottom:14px; font-size:28px; transform:rotate(-6deg);
+  }
+  .brand h1{ font-weight:700; font-size:34px; margin:0; position:relative; display:inline-block; }
+  .brand h1 .squiggle{ display:block; width:120px; height:10px; margin:2px auto 0; }
+  .brand p{ color:var(--muted); margin:10px 0 0; font-size:14px; font-weight:700; }
+
+  .card{ background:var(--card); border-radius:20px; padding:18px; box-shadow:0 10px 30px rgba(36,29,61,0.08); }
+
+  .field{ display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+  .field:last-of-type{ margin-bottom:0; }
+  .field label{ font-size:12px; color:var(--muted); font-weight:800; letter-spacing:0.05em; text-transform:uppercase; }
+  .row{ display:flex; gap:8px; }
+  input[type=text]{
+    flex:1; min-width:0;
+    background:#F7F7FC; border:2px solid var(--line); color:var(--ink);
+    border-radius:14px; padding:14px 16px; font-size:16px; font-family:'Space Mono', monospace; letter-spacing:0.1em;
+    outline:none;
+  }
+  input[type=text]:focus{ border-color:var(--grape); }
+  input.name-input{ font-family:'Nunito',sans-serif; font-weight:700; letter-spacing:normal; }
+  .ghost-btn{
+    background:#F0EEFF; border:2px solid var(--line); color:var(--grape-dark);
+    border-radius:14px; padding:0 16px; font-weight:800; font-size:13px; cursor:pointer; white-space:nowrap;
+  }
+  .ghost-btn:active{ transform:translateY(1px) scale(0.97); }
+  .primary-btn{
+    background:linear-gradient(135deg, var(--grape), var(--grape-dark));
+    color:#fff; border:none; border-radius:16px; padding:16px; font-weight:800; font-size:16px;
+    cursor:pointer; box-shadow:0 8px 0 #4529B8, 0 14px 24px rgba(92,63,224,0.28);
+    transition: transform .1s ease, box-shadow .1s ease;
+    font-family:'Fredoka', sans-serif; letter-spacing:0.02em;
+  }
+  .primary-btn:active{ transform:translateY(5px); box-shadow:0 3px 0 #4529B8, 0 6px 12px rgba(92,63,224,0.25); }
+  .primary-btn:disabled{ opacity:0.45; cursor:not-allowed; box-shadow:none; transform:none; }
+  .error-msg{ color:var(--bubblegum); font-weight:800; font-size:13px; text-align:center; min-height:18px; }
+  .setup-warning{
+    background:#FFF7E3; border:2px dashed var(--sun); border-radius:16px; padding:14px 16px;
+    font-size:13px; color:#8A6B00; line-height:1.6; font-weight:700;
+  }
+
+  /* ---------- Room screen ---------- */
+  .room-wrap{ flex:1; display:flex; flex-direction:column; padding: 8px 4px 24px; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .code-chip{
+    display:flex; align-items:center; gap:10px;
+    background:var(--card); border-radius:14px; padding:8px 14px; box-shadow:0 6px 16px rgba(36,29,61,0.08);
+  }
+  .code-chip .code{ font-size:17px; font-weight:700; color:var(--grape-dark); }
+  .leave-btn{ background:var(--card); border:none; color:var(--muted); font-size:13px; cursor:pointer; padding:10px 14px; border-radius:14px; font-weight:800; box-shadow:0 6px 16px rgba(36,29,61,0.06); }
+  .leave-btn:active{ transform:scale(0.96); }
+
+  .players{ margin-top:18px; }
+  .players-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip{
+    background:var(--card); border-radius:999px; padding:7px 14px 7px 10px; font-size:13px; font-weight:800; color:var(--ink);
+    display:flex; align-items:center; gap:7px; box-shadow:0 4px 10px rgba(36,29,61,0.07);
+  }
+  .chip .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .chip.winner{ background:#FFEAF2; color:var(--bubblegum); box-shadow:0 4px 12px rgba(255,79,135,0.25); }
+  .empty-note{ color:var(--muted); font-size:13px; font-weight:700; }
+
+  .stage{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
+    padding:24px 0; position:relative;
+  }
+  .round-pill{
+    background:var(--grape); color:#fff; font-weight:800; font-size:12px; letter-spacing:0.08em;
+    text-transform:uppercase; padding:6px 16px; border-radius:999px;
+  }
+
+  .buzzer-zone{ position:relative; display:flex; align-items:center; justify-content:center; }
+  .buzzer{
+    width:clamp(150px, 46vw, 224px); height:clamp(150px, 46vw, 224px); border-radius:50%;
+    border:none; cursor:pointer; position:relative;
+    background:linear-gradient(140deg, var(--tangerine), var(--bubblegum));
+    box-shadow: 0 10px 0 #C23566, 0 18px 30px rgba(255,79,135,0.35);
+    color:#fff; font-family:'Fredoka', sans-serif; font-size:clamp(22px, 6.5vw, 30px); letter-spacing:0.03em;
+    transition: transform .1s ease, box-shadow .1s ease, filter .2s ease;
+  }
+  .buzzer:active:not(:disabled){ transform:scale(0.93); box-shadow:0 4px 0 #C23566, 0 8px 16px rgba(255,79,135,0.3); }
+  .buzzer:disabled.is-you{
+    background:linear-gradient(140deg, var(--mint), #17A986);
+    box-shadow:0 10px 0 #0F7B62, 0 16px 26px rgba(34,198,155,0.3); color:#fff; cursor:default;
+  }
+  .buzzer:disabled.is-other{
+    background:#E7E3F5; color:#A79FC4; box-shadow:0 10px 0 #D2CCE8, 0 14px 20px rgba(36,29,61,0.08); cursor:not-allowed;
+  }
+  .buzzer:focus-visible{ outline:3px solid var(--grape); outline-offset:5px; }
+
+  .status{ min-height:60px; text-align:center; }
+  .status .idle{ color:var(--muted); font-size:14px; font-weight:700; }
+  .status .winner-line{ font-family:'Fredoka', sans-serif; font-size:clamp(20px,6vw,27px); color:var(--bubblegum); }
+  .status .winner-line.you{ color:var(--mint); }
+
+  /* confetti burst */
+  .confetti{
+    position:absolute; top:50%; left:50%; width:10px; height:10px; border-radius:3px;
+    margin:-5px 0 0 -5px; opacity:0.95;
+    animation: confetti-pop 900ms ease-out forwards;
+  }
+  @keyframes confetti-pop{
+    0%{ transform:translate(0,0) rotate(0deg) scale(1); opacity:1; }
+    100%{ transform:translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.4); opacity:0; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .confetti{ animation:none; display:none; }
+    .buzzer, .primary-btn{ transition:none; }
+  }
+
+  .reset-btn{
+    background:var(--card); color:var(--grape-dark); border:none; border-radius:14px; padding:12px 22px;
+    font-weight:800; font-size:14px; cursor:pointer; box-shadow:0 6px 16px rgba(36,29,61,0.1);
+    font-family:'Fredoka', sans-serif;
+  }
+  .reset-btn:active{ transform:scale(0.96); }
+  .host-fallback-note{ color:var(--muted); font-size:12px; font-weight:700; text-align:center; margin-top:2px; }
+  .conn-note{ color:var(--muted); font-size:12px; font-weight:700; text-align:center; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== JOIN SCREEN ===================== -->
+  <div class="join-wrap" v-if="screen === 'join'">
+    <div class="brand">
+      <div class="mark">🙋</div>
+      <h1 class="display">Quiz Buzz</h1>
+      <p>Create a room, share the code, and be first to buzz in!</p>
+    </div>
+
+    <div class="setup-warning" v-if="!configured">
+      Firebase の設定がまだ完了していません。ファイル冒頭の <span class="mono">firebaseConfig</span> の <span class="mono">databaseURL</span> を、Realtime Database の URL に置き換えてください。
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label>Room Code</label>
+        <div class="row">
+          <input type="text" class="mono" v-model="roomCodeInput" maxlength="6" placeholder="ABCD"
+                 @input="roomCodeInput = roomCodeInput.toUpperCase()" :disabled="!configured">
+          <button class="ghost-btn" @click="roomCodeInput = generateRoomCode()" :disabled="!configured">Generate</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Your Name</label>
+        <input type="text" class="name-input" v-model="nameInput" maxlength="20" placeholder="e.g. Taro" :disabled="!configured">
+      </div>
+    </div>
+
+    <button class="primary-btn" @click="joinRoom" :disabled="!configured || joining">
+      {{ joining ? 'Connecting…' : 'Join Room 🎉' }}
+    </button>
+    <div class="error-msg">{{ errorMsg }}</div>
+  </div>
+
+  <!-- ===================== ROOM SCREEN ===================== -->
+  <div class="room-wrap" v-if="screen === 'room'">
+    <div class="topbar">
+      <div class="code-chip">
+        <span class="eyebrow">Room</span>
+        <span class="code mono">{{ roomCode }}</span>
+        <button class="ghost-btn" @click="copyCode" style="padding:6px 10px; font-size:11px;">{{ copyLabel }}</button>
+      </div>
+      <button class="leave-btn" @click="leaveRoom">Leave</button>
+    </div>
+
+    <div class="players">
+      <div class="players-head">
+        <span class="eyebrow">Players ({{ sortedParticipants.length }})</span>
+      </div>
+      <div class="chips" v-if="sortedParticipants.length">
+        <span class="chip" v-for="(p, i) in sortedParticipants" :key="p.id" :class="{ winner: p.id === buzz.winnerId }">
+          <span class="dot" :style="{ background: dotColor(i) }" v-if="p.id !== buzz.winnerId"></span>
+          <span v-else>⭐</span>
+          {{ p.name }}<span v-if="p.id === myId"> (you)</span>
+        </span>
+      </div>
+      <div class="empty-note" v-else>Waiting for players to join…</div>
+    </div>
+
+    <div class="stage">
+      <div class="round-pill">Round {{ buzz.round || 1 }}</div>
+
+      <div class="buzzer-zone">
+        <button class="buzzer" :class="{ 'is-you': buzz.winnerId === myId, 'is-other': buzz.winnerId && buzz.winnerId !== myId }"
+                :disabled="!!buzz.winnerId" @click="pressBuzz">
+          {{ buzz.winnerId === myId ? 'GOT IT!' : (buzz.winnerId ? 'BUZZED' : 'BUZZ IN') }}
+        </button>
+        <span class="confetti" v-for="d in confettiDots" :key="d.id"
+              :style="{ background: d.color, '--dx': d.dx, '--dy': d.dy, '--rot': d.rot }"></span>
+      </div>
+
+      <div class="status">
+        <div class="idle" v-if="!buzz.winnerId">Waiting for the first buzz…</div>
+        <div v-else class="winner-line" :class="{ you: buzz.winnerId === myId }">
+          {{ buzz.winnerId === myId ? '🎉 You buzzed in first!' : '🎉 ' + buzz.winnerName + ' buzzed in first!' }}
+        </div>
+      </div>
+
+      <button class="reset-btn" v-if="canReset" @click="resetRound">Next Round →</button>
+      <div class="host-fallback-note" v-if="canReset && !isHost">Host left — you can reset the round.</div>
+    </div>
+
+    <div class="conn-note" v-if="!connected">Reconnecting…</div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// STEP: Paste your own Firebase project config below.
+// Firebase console → Project settings → Your apps → SDK setup
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAFjDeWIyhDYewz6Da2zgmLMKCRw-wHxCQ",
+  authDomain: "quiz-buzz-377e9.firebaseapp.com",
+  // Realtime Database 作成後に表示される URL に置き換えてください
+  databaseURL: "https://YOUR_DATABASE_URL",
+  projectId: "quiz-buzz-377e9",
+  storageBucket: "quiz-buzz-377e9.firebasestorage.app",
+  messagingSenderId: "850231200590",
+  appId: "1:850231200590:web:83435f6db1fa55ebb7ec1f"
+};
+
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I to avoid confusion
+const PALETTE = ['#7C5CFC', '#FF8A3D', '#22C69B', '#FFC93C', '#FF4F87'];
+
+const { createApp } = Vue;
+
+createApp({
+  data(){
+    return {
+      configured: firebaseConfig.apiKey !== "YOUR_API_KEY" && !firebaseConfig.databaseURL.includes("YOUR_"),
+      screen: 'join',
+      roomCodeInput: '',
+      nameInput: '',
+      joining: false,
+      errorMsg: '',
+      connected: true,
+      copyLabel: 'Copy',
+
+      db: null,
+      roomCode: '',
+      myId: '',
+      myName: '',
+      meta: { hostId: null },
+      participants: {},
+      buzz: { round: 1, winnerId: null, winnerName: null },
+
+      refs: { meta: null, participants: null, buzz: null, myParticipant: null, connected: null },
+      confettiDots: [],
+    };
+  },
+  computed: {
+    sortedParticipants(){
+      return Object.entries(this.participants)
+        .map(([id, p]) => ({ id, ...p }))
+        .sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+    },
+    isHost(){ return this.meta.hostId === this.myId; },
+    hostPresent(){ return !!(this.meta.hostId && this.participants[this.meta.hostId]); },
+    canReset(){ return this.isHost || !this.hostPresent; },
+  },
+  watch: {
+    'buzz.winnerId'(newVal, oldVal){ if (newVal && !oldVal) this.spawnConfetti(); }
+  },
+  created(){
+    if (this.configured){
+      firebase.initializeApp(firebaseConfig);
+      this.db = firebase.database();
+    }
+    try {
+      const saved = JSON.parse(localStorage.getItem('buzzer_identity') || 'null');
+      if (saved && saved.id && saved.name){ this.myId = saved.id; this.nameInput = saved.name; }
+    } catch(e) {}
+    if (!this.myId){
+      this.myId = (crypto.randomUUID ? crypto.randomUUID() : 'p-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+    }
+  },
+  methods: {
+    dotColor(i){ return PALETTE[i % PALETTE.length]; },
+    generateRoomCode(){
+      let code = '';
+      for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+      return code;
+    },
+    saveIdentity(){
+      try { localStorage.setItem('buzzer_identity', JSON.stringify({ id: this.myId, name: this.myName })); } catch(e) {}
+    },
+    async joinRoom(){
+      this.errorMsg = '';
+      const code = this.roomCodeInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const name = this.nameInput.trim();
+      if (!code){ this.errorMsg = 'Enter or generate a room code.'; return; }
+      if (!name){ this.errorMsg = 'Enter your name.'; return; }
+
+      this.joining = true;
+      try {
+        this.roomCode = code;
+        this.myName = name;
+        this.saveIdentity();
+
+        const roomRef = this.db.ref('rooms/' + code);
+        this.refs.meta = roomRef.child('meta');
+        this.refs.participants = roomRef.child('participants');
+        this.refs.buzz = roomRef.child('buzz');
+        this.refs.myParticipant = this.refs.participants.child(this.myId);
+
+        await this.refs.meta.transaction(current =>
+          current === null ? { hostId: this.myId, createdAt: Date.now() } : undefined
+        );
+        await this.refs.buzz.transaction(current =>
+          current === null ? { round: 1, winnerId: null, winnerName: null } : undefined
+        );
+
+        await this.refs.myParticipant.set({
+          name: this.myName,
+          joinedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        this.refs.myParticipant.onDisconnect().remove();
+
+        this.refs.meta.on('value', snap => { this.meta = snap.val() || { hostId: null }; });
+        this.refs.participants.on('value', snap => { this.participants = snap.val() || {}; });
+        this.refs.buzz.on('value', snap => { this.buzz = snap.val() || { round: 1, winnerId: null, winnerName: null }; });
+
+        const connRef = firebase.database().ref('.info/connected');
+        connRef.on('value', snap => { this.connected = snap.val() === true; });
+        this.refs.connected = connRef;
+
+        this.screen = 'room';
+      } catch(e){
+        this.errorMsg = 'Could not connect. Check your Firebase config and rules.';
+      } finally {
+        this.joining = false;
+      }
+    },
+    pressBuzz(){
+      if (this.buzz.winnerId) return;
+      this.refs.buzz.transaction(current => {
+        if (current && current.winnerId === null){
+          return { round: current.round, winnerId: this.myId, winnerName: this.myName };
+        }
+        return;
+      });
+    },
+    resetRound(){
+      this.confettiDots = [];
+      this.refs.buzz.transaction(current => ({
+        round: (current && current.round ? current.round : 0) + 1,
+        winnerId: null,
+        winnerName: null
+      }));
+    },
+    spawnConfetti(){
+      const dots = [];
+      const count = 16;
+      for (let i = 0; i < count; i++){
+        const angle = (Math.PI * 2 * i) / count + (Math.random() * 0.4 - 0.2);
+        const dist = 90 + Math.random() * 90;
+        dots.push({
+          id: Date.now() + '-' + i,
+          dx: (Math.cos(angle) * dist).toFixed(0) + 'px',
+          dy: (Math.sin(angle) * dist).toFixed(0) + 'px',
+          rot: (Math.random() * 360).toFixed(0) + 'deg',
+          color: PALETTE[i % PALETTE.length],
+        });
+      }
+      this.confettiDots = dots;
+      setTimeout(() => { this.confettiDots = []; }, 950);
+    },
+    copyCode(){
+      navigator.clipboard?.writeText(this.roomCode).then(() => {
+        this.copyLabel = 'Copied!';
+        setTimeout(() => { this.copyLabel = 'Copy'; }, 1500);
+      });
+    },
+    leaveRoom(){
+      if (this.refs.myParticipant) this.refs.myParticipant.remove();
+      Object.values(this.refs).forEach(r => { if (r && r.off) r.off(); });
+      this.refs = { meta: null, participants: null, buzz: null, myParticipant: null, connected: null };
+      this.participants = {};
+      this.meta = { hostId: null };
+      this.buzz = { round: 1, winnerId: null, winnerName: null };
+      this.roomCode = '';
+      this.confettiDots = [];
+      this.screen = 'join';
+    }
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
