@@ -277,8 +277,7 @@
 const firebaseConfig = {
   apiKey: "AIzaSyAFjDeWIyhDYewz6Da2zgmLMKCRw-wHxCQ",
   authDomain: "quiz-buzz-377e9.firebaseapp.com",
-  // Realtime Database 作成後に表示される URL に置き換えてください
-  databaseURL: "https://YOUR_DATABASE_URL",
+  databaseURL: "https://quiz-buzz-377e9-default-rtdb.firebaseio.com",
   projectId: "quiz-buzz-377e9",
   storageBucket: "quiz-buzz-377e9.firebasestorage.app",
   messagingSenderId: "850231200590",
